@@ -1,4 +1,8 @@
-
+/*
+Robot-Atelier
+Les programmes pour le robot de l'atelier avec la nunchuck avec et sans fil
+Programme par Alexis MOYART
+*/
 
 //Inclu les libraires
 #include <Wire.h>
