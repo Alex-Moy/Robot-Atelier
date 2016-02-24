@@ -20,25 +20,49 @@ long valy;
 
 //Déclare la valeur du bouton
 int zButton;
+int yButton;
+
+//Déclare la variable du mode
+int mode = 0;
+
+//Définie le temps pour l'anti-rebont
+const int debounce = 500;
+long timedebounce;
+
+//Définie la distance limite
+const int distancelimite = 40;
+
+//Défnie la valeur d'erreur de distance
+const int erreurdistance = 5;
 
 //Définie les pins moteur gauche (à définir)
-const int MGpolun = 6;
-const int MGpoldeux = 2;
+const int MGpolun = A0;
+const int MGpoldeux = A1;
 const int MGspeed = 5;
 
 //Définie les pins moteur droite (à définir)
-const int MDpolun = 9;
-const int MDpoldeux = 10;
+const int MDpolun = A2;
+const int MDpoldeux = A3;
 const int MDspeed = 3;
 
+//Définie le pin du haut-parleur
 const int hp = 4;
+
+//Définie les pins des détecteur de distance
+const int trigG = 9;
+const int trigD = 2;
+const int echoG = 10;
+const int echoD = 6;
 
 //Déclare les variable de stockage des vitesses
 int vitesseMG;
 int vitesseMD;
 
+//Déclare les variables de stockage des mesures
+int mesureG;
+int mesureD;
+
 unsigned long valrecept;
-unsigned long valenvoi = 1;
 
 void setup()
 {
@@ -79,31 +103,45 @@ void loop()
 {
   reception();
   degroupe();
-  polaritemoteur();
-  speedmoteur();
-  klaxon();
+  if(mode == 0)
+  {
+    polaritemoteurcontrole();
+    speedmoteurcontrole();
+    klaxoncontrole();
+  }
+  else {
+    mesureautonomie();
+    actionneautonomie();
+  }
 }
 
 void reception()
 {
-  while(!Mirf.dataReady()) {
-    digitalWrite(A0, HIGH);
-  }
-  digitalWrite(A0, LOW);
+  while(!Mirf.dataReady()) {/*Vide*/}
   Mirf.getData((byte *) &valrecept);
   Serial.println(valrecept);
 }
 
 void degroupe()
 {
-  valx = valrecept / 10000;
+  valx = valrecept / 100000;
   valx = valx - 200;
-  valy = (valrecept % 10000) / 10;
+  valy = (valrecept % 100000) / 100;
   valy = valy - 200;
-  zButton = valrecept % 10;
+  zButton = (valrecept % 100) / 10;
+  yButton = valrecept % 10;
 }
 
-void polaritemoteur()
+void modeselect()
+{
+  if(zButton == 1 && yButton == 1) {
+    if(mode == 0) {mode = 1;}
+    if(mode == 1) {mode = 0;}
+    delay(1000);
+  }
+}
+
+void polaritemoteurcontrole()
 {
   //Met les deux moteurs en marche arrière
   if(valy < 0) {
@@ -122,7 +160,7 @@ void polaritemoteur()
   }
 }
 
-void speedmoteur()
+void speedmoteurcontrole()
 {
   //Pffffiou, là c'est le gros bazard, en gros, je regarde dans quelle zone est je joystick et calcule les vitesse !
 
@@ -181,24 +219,89 @@ void speedmoteur()
   analogWrite(MDspeed, vitesseMD);
 }
 
-void klaxon()
+void klaxoncontrole()
 {
-  //Fait un double BIP si le bouton Z est préssé
-  if(zButton == 1) {
+  if((millis() - timedebounce) >= debounce) {
+    //Fait un double BIP si le bouton Z est préssé
+    if(zButton == 1) {
+  
+     //Fait un premier BIP
+      tone(hp, 600, 300);
+      delay(300);
+      noTone(hp);
 
-   //Fait un premier BIP
-    tone(hp, 600, 300);
-    delay(300);
-    noTone(hp);
+      //Attend un petit peu avant le second
+      delay(50);
 
-    //Attend un petit peu avant le second
-    delay(50);
+      //Fait un second BIP
+      tone(hp, 600, 300);
+      delay(300);
+      noTone(hp);
 
-    //Fait un second BIP
-    tone(hp, 600, 300);
-    delay(300);
-    noTone(hp);
-
-    for(int val; val <= 10; val++){reception();}
+      //Réinitialise l'anti-rebont
+      timedebounce = millis();
+    }
   }
+}
+
+void mesureautonomie()
+{
+  //Mesure à gauche
+  digitalWrite(trigG, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigG, LOW);
+  mesureG = (pulseIn(echoG, HIGH) / 58,8);
+
+  //Mesure à droite
+  digitalWrite(trigD, HIGH);
+  delayMicroseconds(10);
+  digitalWrite(trigD, LOW);
+  mesureD = (pulseIn(echoD, HIGH) / 58,8);
+}
+
+void actionneautonomie()
+{
+  if((mesureG < erreurdistance || mesureG >= distancelimite) && (mesureD < erreurdistance || mesureD >= distancelimite)) {
+    arretmoteurs();
+    
+    //Si les mesures est incorrecte ou que les mesures sont supérieures ou égales à 40cm on allume les moteurs en avant à la vitesse max
+    digitalWrite(MGpolun, HIGH);
+    digitalWrite(MGpoldeux, LOW);
+    digitalWrite(MGspeed, HIGH);
+    digitalWrite(MDpolun, HIGH);
+    digitalWrite(MDpoldeux, LOW);
+    digitalWrite(MGspeed, HIGH);
+  }
+  
+  if(mesureG > erreurdistance && mesureG < distancelimite) {
+    arretmoteurs();
+    
+    //Si il détecte un truc à gauche alors MG avance et MD recule
+    digitalWrite(MGpolun, HIGH);
+    digitalWrite(MGpoldeux, LOW);
+    digitalWrite(MGspeed, HIGH);
+    digitalWrite(MDpolun, LOW);
+    digitalWrite(MDpoldeux, HIGH);
+    digitalWrite(MGspeed, HIGH);
+  }
+  
+  if(mesureD > erreurdistance && mesureD < distancelimite) {
+    arretmoteurs();
+    
+    //Si il détecte un truc à gauche alors MG avance et MD recule
+    digitalWrite(MGpolun, LOW);
+    digitalWrite(MGpoldeux, HIGH);
+    digitalWrite(MGspeed, HIGH);
+    digitalWrite(MDpolun, HIGH);
+    digitalWrite(MDpoldeux, LOW);
+    digitalWrite(MGspeed, HIGH);
+  }
+}
+
+void arretmoteurs()
+{
+  //Eteint les moteurs pendant un court temps pour éviter qu'ils repartent imédiatement dans le sens opposé
+  digitalWrite(MGspeed, LOW);
+  digitalWrite(MGspeed, LOW);
+  delay(10);
 }
