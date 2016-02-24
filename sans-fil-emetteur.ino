@@ -123,7 +123,7 @@ void miseajour()
 
 void regroupe()
 {
-  valenvoi = valx * 10000 + valy * 10 + nunchuk.zButton;
+  valenvoi = valx * 100000 + valy * 100 + nunchuk.zButton * 10 + nunchuk.yButton;
   Serial.println(valenvoi);
 }
 
